@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tileset Base Generator</title>
+    <meta
+      name="description"
+      content="Generate the 15-piece (4x4) base shape for a top-down tileset, from scratch, in your browser. Tune tile size, edges, colors, and noise, then export pixel-perfect PNGs."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f2efe6;
+        --muted: #a8a399;
+        --panel: #242521;
+        --panel-2: #1a1c19;
+        --line: #3b3d36;
+        --field: #11130f;
+        --accent: #d9a441;
+        --accent-2: #76a842;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+          #151712;
+        background-size: 24px 24px;
+        color: var(--ink);
+        font-family: "Bahnschrift", "Aptos", "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+        gap: 20px;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: rgba(26, 28, 25, 0.94);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: 0;
+        line-height: 1.1;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        background: rgba(36, 37, 33, 0.95);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        color: #ded8c9;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .panel-body {
+        display: grid;
+        gap: 13px;
+        padding: 14px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 138px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      label,
+      .label {
+        color: #c9c2b4;
+        font-size: 13px;
+        line-height: 1.2;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid #34362f;
+        background: var(--field);
+      }
+
+      .segmented.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .segmented button {
+        min-height: 34px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        transition: background 120ms ease, color 120ms ease;
+      }
+
+      .segmented button[aria-pressed="true"] {
+        background: #e0b34e;
+        color: #18160f;
+        font-weight: 800;
+      }
+
+      .range-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 48px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .value {
+        color: #f2dda6;
+        font-family: "Cascadia Code", "Consolas", monospace;
+        font-size: 12px;
+        text-align: right;
+      }
+
+      input[type="color"] {
+        width: 42px;
+        height: 34px;
+        padding: 2px;
+        border: 1px solid #4a4d43;
+        background: var(--field);
+      }
+
+      input[type="number"],
+      select {
+        width: 100%;
+        min-height: 36px;
+        border: 1px solid #4a4d43;
+        background: var(--field);
+        color: var(--ink);
+        padding: 7px 9px;
+      }
+
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+      }
+
+      .swatches button {
+        min-height: 34px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: var(--swatch);
+      }
+
+      .checks {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 8px 9px;
+        border: 1px solid #3b3d36;
+        background: var(--field);
+        color: #d7d1c3;
+        font-size: 13px;
+      }
+
+      .check input {
+        accent-color: var(--accent);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .action {
+        min-height: 40px;
+        border: 1px solid #6e5d33;
+        background: #d9a441;
+        color: #17140d;
+        font-weight: 800;
+      }
+
+      .action.secondary {
+        border-color: #3f4437;
+        background: #262a22;
+        color: #e7e1d2;
+      }
+
+      .preview-stage {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-width: 0;
+        border: 1px solid var(--line);
+        background: #10120f;
+      }
+
+      .preview-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(26, 28, 25, 0.94);
+      }
+
+      .readout {
+        color: var(--muted);
+        font-family: "Cascadia Code", "Consolas", monospace;
+        font-size: 12px;
+      }
+
+      .canvas-wrap {
+        display: grid;
+        place-items: center;
+        min-height: 0;
+        padding: clamp(12px, 2vw, 28px);
+        overflow: auto;
+      }
+
+      canvas {
+        display: block;
+        width: min(100%, 820px);
+        height: auto;
+        border: 1px solid #0a0b09;
+        background:
+          linear-gradient(45deg, #c9c9c9 25%, transparent 25%),
+          linear-gradient(-45deg, #c9c9c9 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #c9c9c9 75%),
+          linear-gradient(-45deg, transparent 75%, #c9c9c9 75%),
+          #ffffff;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+        background-size: 16px 16px;
+        image-rendering: pixelated;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 20px 22px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 16px;
+      }
+
+      .footer a {
+        color: #c9c2b4;
+        text-decoration: none;
+      }
+
+      .footer a:hover {
+        color: var(--ink);
+      }
+
+      @media (max-width: 980px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .preview-stage {
+          min-height: 72vh;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .shell {
+          padding: 12px;
+        }
+
+        .brand,
+        .preview-toolbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .meta {
+          text-align: left;
+        }
+
+        .row {
+          grid-template-columns: 1fr;
+          gap: 7px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar" aria-label="Tileset controls">
+        <section class="brand">
+          <h1>Tileset Base Generator</h1>
+          <div class="meta">15 pieces<br />4 x 4 mask sheet</div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">Geometry</div>
+          <div class="panel-body">
+            <div class="row">
+              <div class="label">Tile size</div>
+              <div class="segmented" data-setting="tileSize">
+                <button type="button" data-value="16">16</button>
+                <button type="button" data-value="32">32</button>
+                <button type="button" data-value="64">64</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <label for="cornerRadius">Corner radius</label>
+              <div class="range-wrap">
+                <input id="cornerRadius" type="range" min="0" max="18" value="4" />
+                <output class="value" for="cornerRadius">4</output>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Edge style</div>
+              <div class="segmented two" data-setting="edgeStyle">
+                <button type="button" data-value="rough">Rough</button>
+                <button type="button" data-value="clean">Clean</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <label for="edgeRoughness">Edge noise</label>
+              <div class="range-wrap">
+                <input id="edgeRoughness" type="range" min="0" max="14" value="6" />
+                <output class="value" for="edgeRoughness">6</output>
+              </div>
+            </div>
+
+            <div class="row">
+              <label for="edgeFrequency">Noise size</label>
+              <div class="range-wrap">
+                <input id="edgeFrequency" type="range" min="2" max="14" value="5" />
+                <output class="value" for="edgeFrequency">5</output>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">Color</div>
+          <div class="panel-body">
+            <div class="row">
+              <label for="baseColor">Base color</label>
+              <input id="baseColor" type="color" value="#73ad38" />
+            </div>
+
+            <div class="row">
+              <label for="edgeColor">Edge color</label>
+              <input id="edgeColor" type="color" value="#2f662d" />
+            </div>
+
+            <div class="row">
+              <label for="edgeFade">Edge fade</label>
+              <div class="range-wrap">
+                <input id="edgeFade" type="range" min="0" max="12" value="4" />
+                <output class="value" for="edgeFade">4</output>
+              </div>
+            </div>
+
+            <div class="row">
+              <label for="textureNoise">Texture noise</label>
+              <div class="range-wrap">
+                <input id="textureNoise" type="range" min="0" max="42" value="10" />
+                <output class="value" for="textureNoise">10</output>
+              </div>
+            </div>
+
+            <div class="row">
+              <label for="fleckAmount">Flecks</label>
+              <div class="range-wrap">
+                <input id="fleckAmount" type="range" min="0" max="24" value="6" />
+                <output class="value" for="fleckAmount">6</output>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Presets</div>
+              <div class="swatches" aria-label="Color presets">
+                <button type="button" data-preset="#73ad38,#2f662d" style="--swatch: #73ad38"></button>
+                <button type="button" data-preset="#8a8f8b,#565b5f" style="--swatch: #8a8f8b"></button>
+                <button type="button" data-preset="#a67844,#5a3f2c" style="--swatch: #a67844"></button>
+                <button type="button" data-preset="#447d9a,#244a62" style="--swatch: #447d9a"></button>
+                <button type="button" data-preset="#c6b376,#796537" style="--swatch: #c6b376"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">Output</div>
+          <div class="panel-body">
+            <div class="row">
+              <label for="seed">Seed</label>
+              <input id="seed" type="number" min="1" max="999999" value="31415" />
+            </div>
+
+            <div class="checks">
+              <label class="check">
+                <input id="whiteBackground" type="checkbox" checked />
+                White bg
+              </label>
+              <label class="check">
+                <input id="showGrid" type="checkbox" checked />
+                Black grid
+              </label>
+              <label class="check">
+                <input id="providerSize" type="checkbox" />
+                1024 upscale
+              </label>
+              <label class="check">
+                <input id="pixelFlecks" type="checkbox" checked />
+                Pixel clusters
+              </label>
+            </div>
+
+            <div class="actions">
+              <button class="action secondary" id="randomSeed" type="button">New seed</button>
+              <button class="action" id="download" type="button">Download PNG</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="preview-stage" aria-label="Tileset preview">
+        <div class="preview-toolbar">
+          <div class="readout" id="readout">ready</div>
+          <div class="readout">slot 4,10,13,12 / 9,14,15,7 / 2,3,11,5 / 0,8,6,1</div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="preview" width="1024" height="1024"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Open source, MIT. Provided as is, no support or updates promised.</span>
+      <span class="footer-links">
+        <a href="https://github.com/SpriteCook/spritecook-tileset-gen" rel="noopener">Source</a>
+        <a href="https://www.spritecook.ai" rel="noopener">Made by SpriteCook</a>
+      </span>
+    </footer>
+
+    <script>
+      const layout = [
+        [4, 10, 13, 12],
+        [9, 14, 15, 7],
+        [2, 3, 11, 5],
+        [0, 8, 6, 1],
+      ];
+
+      // Corner bits: TL = 1, TR = 2, BL = 4, BR = 8. Each tile is a union of the
+      // filled quadrants. A quadrant side bleeds (extends to the tile edge) when the
+      // region across it is grass — either outside the tile (so neighbours connect) or
+      // a filled quadrant inside the tile (so the seam merges). A side facing empty
+      // space is the only place the silhouette, rounding, and roughness appear.
+      const quadrants = [
+        { bit: 1, col: 0, row: 0 },
+        { bit: 2, col: 1, row: 0 },
+        { bit: 4, col: 0, row: 1 },
+        { bit: 8, col: 1, row: 1 },
+      ];
+
+      function bitAt(col, row) {
+        if (col < 0 || col > 1 || row < 0 || row > 1) return -1; // outside tile = always grass
+        return 1 << (row * 2 + col);
+      }
+
+      const preview = document.querySelector("#preview");
+      const ctx = preview.getContext("2d");
+      const readout = document.querySelector("#readout");
+      const ranges = document.querySelectorAll('input[type="range"]');
+      const state = {
+        tileSize: 32,
+        edgeStyle: "rough",
+      };
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+
+      function smoothstep(t) {
+        return t * t * (3 - 2 * t);
+      }
+
+      // Smooth minimum: like Math.min but rounds the concave junction where two shapes
+      // meet, by radius ~k. Used to union the quadrant boxes so inner notch corners
+      // round inward instead of meeting at a sharp 90 degrees.
+      function smin(a, b, k) {
+        if (k <= 0) return Math.min(a, b);
+        const h = clamp(0.5 + (0.5 * (b - a)) / k, 0, 1);
+        return lerp(b, a, h) - k * h * (1 - h);
+      }
+
+      function hexToRgb(hex) {
+        const clean = hex.replace("#", "");
+        return {
+          r: parseInt(clean.slice(0, 2), 16),
+          g: parseInt(clean.slice(2, 4), 16),
+          b: parseInt(clean.slice(4, 6), 16),
+        };
+      }
+
+      function mixColor(a, b, t) {
+        const amount = clamp(t, 0, 1);
+        return {
+          r: Math.round(lerp(a.r, b.r, amount)),
+          g: Math.round(lerp(a.g, b.g, amount)),
+          b: Math.round(lerp(a.b, b.b, amount)),
+        };
+      }
+
+      function shadeColor(color, amount) {
+        return {
+          r: clamp(Math.round(color.r + amount), 0, 255),
+          g: clamp(Math.round(color.g + amount), 0, 255),
+          b: clamp(Math.round(color.b + amount), 0, 255),
+        };
+      }
+
+      function hash2(x, y, seed) {
+        let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 2246822519);
+        n = Math.imul(n ^ (n >>> 13), 1274126177);
+        return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+      }
+
+      function valueNoise(x, y, seed) {
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const tx = smoothstep(x - xi);
+        const ty = smoothstep(y - yi);
+        const a = hash2(xi, yi, seed);
+        const b = hash2(xi + 1, yi, seed);
+        const c = hash2(xi, yi + 1, seed);
+        const d = hash2(xi + 1, yi + 1, seed);
+        return lerp(lerp(a, b, tx), lerp(c, d, tx), ty);
+      }
+
+      function fbm(x, y, seed) {
+        let total = 0;
+        let amp = 0.55;
+        let freq = 1;
+        let norm = 0;
+        for (let i = 0; i < 4; i += 1) {
+          total += valueNoise(x * freq, y * freq, seed + i * 71) * amp;
+          norm += amp;
+          amp *= 0.5;
+          freq *= 2;
+        }
+        return total / norm;
+      }
+
+      // Signed distance to an axis-aligned box [l,t,r,b] with corners rounded by `radius`.
+      // Flat sides sit exactly on the box bounds; only corners curve inward.
+      function roundedBoxSdf(px, py, l, t, r, b, radius) {
+        const cx = (l + r) * 0.5;
+        const cy = (t + b) * 0.5;
+        const hx = (r - l) * 0.5;
+        const hy = (b - t) * 0.5;
+        const rad = Math.min(radius, hx, hy);
+        const qx = Math.abs(px - cx) - (hx - rad);
+        const qy = Math.abs(py - cy) - (hy - rad);
+        const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+        const inside = Math.min(Math.max(qx, qy), 0);
+        return outside + inside - rad;
+      }
+
+      // Each quadrant's interior sides reach past the tile centre by OVERLAP * tile.
+      // That widens the bands slightly (the reference divides sit near 0.58, not 0.5)
+      // and, crucially, makes diagonal tiles (TL+BR, TR+BL) overlap into one connected
+      // shape with a centre bridge instead of pinching at a single point.
+      const OVERLAP = 0.09;
+
+      function maskSdf(mask, x, y, tileSize, radius, roughness) {
+        const half = tileSize * 0.5;
+        const ov = OVERLAP * tileSize;
+        // Push only the outer (tile-edge) sides out by this much so neither the corner
+        // rounding nor the edge noise ever bites into a bleeding edge; tiles stay
+        // connectable. Interior sides are left in place: they merge with filled
+        // neighbours through the `ov` overlap and round where they face empty space.
+        const ext = radius + roughness + 1;
+        let dist = null;
+        for (const q of quadrants) {
+          if ((mask & q.bit) === 0) continue;
+
+          let l = q.col === 0 ? 0 - ext : half - ov;
+          let r = q.col === 1 ? tileSize + ext : half + ov;
+          let t = q.row === 0 ? 0 - ext : half - ov;
+          let b = q.row === 1 ? tileSize + ext : half + ov;
+
+          // Smooth union so the inner corners of notch tiles round inward (concave)
+          // by the same radius, matching the convex rounding of single corners.
+          const d = roundedBoxSdf(x, y, l, t, r, b, radius);
+          dist = dist === null ? d : smin(dist, d, radius);
+        }
+        return dist === null ? 9999 : dist;
+      }
+
+      // Distance from a point to the nearest empty region in the tile, built as the
+      // mirror of the grass quadrants (each empty quadrant pulled back by `ov` where a
+      // filled quadrant overlaps into it). Evaluated only at grass pixels, so the union
+      // by Math.min is exact. Drives the edge fade, which then darkens only along the
+      // real grass/empty silhouette and never along the seam between two filled
+      // quadrants or along a clean bleeding edge.
+      function maskVoidSdf(mask, x, y, tileSize, radius) {
+        const half = tileSize * 0.5;
+        const ov = OVERLAP * tileSize;
+        const filled = (nb) => nb !== -1 && (mask & nb) !== 0;
+        let dist = Infinity;
+        for (const q of quadrants) {
+          if ((mask & q.bit) !== 0) continue; // empty quadrants only
+
+          const l = q.col === 0 ? 0 : filled(bitAt(q.col - 1, q.row)) ? half + ov : half;
+          const r = q.col === 1 ? tileSize : filled(bitAt(q.col + 1, q.row)) ? half - ov : half;
+          const t = q.row === 0 ? 0 : filled(bitAt(q.col, q.row - 1)) ? half + ov : half;
+          const b = q.row === 1 ? tileSize : filled(bitAt(q.col, q.row + 1)) ? half - ov : half;
+
+          dist = Math.min(dist, roundedBoxSdf(x, y, l, t, r, b, radius));
+        }
+        return dist;
+      }
+
+      function getSettings() {
+        const tileSize = state.tileSize;
+        return {
+          tileSize,
+          cornerRadius: Number(document.querySelector("#cornerRadius").value) * (tileSize / 32),
+          edgeStyle: state.edgeStyle,
+          edgeRoughness: Number(document.querySelector("#edgeRoughness").value) * (tileSize / 32),
+          edgeFrequency: Number(document.querySelector("#edgeFrequency").value),
+          baseColor: hexToRgb(document.querySelector("#baseColor").value),
+          edgeColor: hexToRgb(document.querySelector("#edgeColor").value),
+          edgeFade: Number(document.querySelector("#edgeFade").value) * (tileSize / 32),
+          textureNoise: Number(document.querySelector("#textureNoise").value),
+          fleckAmount: Number(document.querySelector("#fleckAmount").value),
+          seed: Number(document.querySelector("#seed").value) || 1,
+          whiteBackground: document.querySelector("#whiteBackground").checked,
+          showGrid: document.querySelector("#showGrid").checked,
+          providerSize: document.querySelector("#providerSize").checked,
+          pixelFlecks: document.querySelector("#pixelFlecks").checked,
+        };
+      }
+
+      // Maps an output axis coordinate to its tile cell + local pixel, or cell -1 when
+      // the coordinate lands on a grid separator. Layout when grid is on (g = 1):
+      // [line][tile][line][tile][line][tile][line][tile][line] = 4*tile + 5 separators.
+      function axisMapper(tile, g) {
+        if (g === 0) return (o) => ({ cell: Math.floor(o / tile), local: o % tile });
+        const period = tile + g;
+        return (o) => {
+          const m = o % period;
+          if (m < g) return { cell: -1, local: 0 };
+          return { cell: Math.floor(o / period), local: m - g };
+        };
+      }
+
+      function renderLogical(settings) {
+        const tile = settings.tileSize;
+        const g = settings.showGrid ? 1 : 0;
+        const size = tile * 4 + g * 5;
+        const logical = document.createElement("canvas");
+        logical.width = size;
+        logical.height = size;
+        const logicalCtx = logical.getContext("2d");
+        const image = logicalCtx.createImageData(size, size);
+        const data = image.data;
+        const roughness = settings.edgeStyle === "clean" ? 0 : settings.edgeRoughness;
+        const noiseSize = Math.max(1, settings.edgeFrequency);
+        const bg = settings.whiteBackground ? { r: 255, g: 255, b: 255, a: 255 } : { r: 0, g: 0, b: 0, a: 0 };
+        const mapAxis = axisMapper(tile, g);
+
+        for (let py = 0; py < size; py += 1) {
+          const ay = mapAxis(py);
+          for (let px = 0; px < size; px += 1) {
+            const ax = mapAxis(px);
+            const i = (py * size + px) * 4;
+
+            if (ax.cell < 0 || ay.cell < 0) {
+              data[i] = 0;
+              data[i + 1] = 0;
+              data[i + 2] = 0;
+              data[i + 3] = 255;
+              continue;
+            }
+
+            const col = ax.cell;
+            const row = ay.cell;
+            const mask = layout[row][col];
+            if (mask === 0) {
+              data[i] = bg.r;
+              data[i + 1] = bg.g;
+              data[i + 2] = bg.b;
+              data[i + 3] = bg.a;
+              continue;
+            }
+
+            const lx = ax.local + 0.5;
+            const ly = ay.local + 0.5;
+            // Continuous content-space coordinates (ignore separators) so noise reads
+            // smoothly tile-to-tile.
+            const cx = col * tile + ax.local;
+            const cy = row * tile + ay.local;
+            const sdf = maskSdf(mask, lx, ly, tile, settings.cornerRadius, roughness);
+            const edgeNoise = (fbm(cx / noiseSize, cy / noiseSize, settings.seed + mask * 113) - 0.5) * roughness;
+            const adjusted = sdf + edgeNoise;
+
+            if (adjusted > 0) {
+              data[i] = bg.r;
+              data[i + 1] = bg.g;
+              data[i + 2] = bg.b;
+              data[i + 3] = bg.a;
+              continue;
+            }
+
+            const grain = (fbm(cx / 4.2, cy / 4.2, settings.seed + 809) - 0.5) * settings.textureNoise;
+            const fleckSeed = hash2(Math.floor(cx / 2), Math.floor(cy / 2), settings.seed + mask * 17);
+            const fleckOn = settings.pixelFlecks && settings.fleckAmount > 0 && fleckSeed > 1 - settings.fleckAmount / 250;
+            // Depth toward the nearest empty region (mirrors the noisy silhouette), so the
+            // fade hugs the real edge and ignores interior seams and bleeding edges.
+            const edgeDepth = maskVoidSdf(mask, lx, ly, tile, settings.cornerRadius) - edgeNoise;
+            const edgeAmount = settings.edgeFade > 0 ? clamp(1 - edgeDepth / settings.edgeFade, 0, 1) : 0;
+            let color = mixColor(settings.baseColor, settings.edgeColor, edgeAmount);
+            color = shadeColor(color, grain);
+            if (fleckOn) {
+              const fleckTone = hash2(cx, cy, settings.seed + 421) > 0.54 ? -42 : 20;
+              color = shadeColor(mixColor(color, settings.edgeColor, 0.35), fleckTone);
+            }
+
+            data[i] = color.r;
+            data[i + 1] = color.g;
+            data[i + 2] = color.b;
+            data[i + 3] = 255;
+          }
+        }
+
+        logicalCtx.putImageData(image, 0, 0);
+        return logical;
+      }
+
+      function scaleCanvas(source, targetSize) {
+        const target = document.createElement("canvas");
+        target.width = targetSize;
+        target.height = targetSize;
+        const targetCtx = target.getContext("2d");
+        targetCtx.imageSmoothingEnabled = false;
+        targetCtx.clearRect(0, 0, targetSize, targetSize);
+        targetCtx.drawImage(source, 0, 0, targetSize, targetSize);
+        return target;
+      }
+
+      function render() {
+        const settings = getSettings();
+        const logical = renderLogical(settings);
+        // Preview shows the true native pixels, upscaled by CSS (image-rendering:
+        // pixelated) so it stays crisp and readable while editing.
+        preview.width = logical.width;
+        preview.height = logical.height;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, preview.width, preview.height);
+        ctx.drawImage(logical, 0, 0);
+        const upscale = settings.providerSize ? ` / exports 1024` : "";
+        readout.textContent = `${settings.tileSize}px tiles / ${logical.width}x${logical.height}px native${upscale} / seed ${settings.seed}`;
+      }
+
+      function syncRangeOutputs() {
+        for (const range of ranges) {
+          const output = range.parentElement.querySelector("output");
+          if (output) output.textContent = range.value;
+        }
+      }
+
+      document.querySelectorAll(".segmented").forEach((group) => {
+        const setting = group.dataset.setting;
+        group.addEventListener("click", (event) => {
+          const button = event.target.closest("button[data-value]");
+          if (!button) return;
+          const value = button.dataset.value;
+          state[setting] = setting === "tileSize" ? Number(value) : value;
+          updateSegments();
+          render();
+        });
+      });
+
+      function updateSegments() {
+        document.querySelectorAll(".segmented").forEach((group) => {
+          const setting = group.dataset.setting;
+          group.querySelectorAll("button").forEach((button) => {
+            button.setAttribute("aria-pressed", String(String(state[setting]) === button.dataset.value));
+          });
+        });
+      }
+
+      document.querySelectorAll("input, select").forEach((control) => {
+        control.addEventListener("input", () => {
+          syncRangeOutputs();
+          render();
+        });
+      });
+
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const [base, edge] = button.dataset.preset.split(",");
+          document.querySelector("#baseColor").value = base;
+          document.querySelector("#edgeColor").value = edge;
+          render();
+        });
+      });
+
+      document.querySelector("#randomSeed").addEventListener("click", () => {
+        document.querySelector("#seed").value = String(Math.floor(1 + Math.random() * 999999));
+        render();
+      });
+
+      document.querySelector("#download").addEventListener("click", () => {
+        const settings = getSettings();
+        const logical = renderLogical(settings);
+        const output = settings.providerSize ? scaleCanvas(logical, 1024) : logical;
+        const dim = settings.providerSize ? "1024" : `${logical.width}px`;
+        const link = document.createElement("a");
+        link.download = `tileset-base-${settings.tileSize}px-${dim}-seed-${settings.seed}.png`;
+        link.href = output.toDataURL("image/png");
+        link.click();
+      });
+
+      updateSegments();
+      syncRangeOutputs();
+      render();
+    </script>
+  </body>
+</html>
