@@ -413,6 +413,14 @@
             </div>
 
             <div class="row">
+              <label for="shades">Shades</label>
+              <div class="range-wrap">
+                <input id="shades" type="range" min="2" max="8" value="4" />
+                <output class="value" for="shades">4</output>
+              </div>
+            </div>
+
+            <div class="row">
               <label for="edgeFade">Edge fade</label>
               <div class="range-wrap">
                 <input id="edgeFade" type="range" min="0" max="12" value="4" />
@@ -697,6 +705,7 @@
           baseColor: hexToRgb(document.querySelector("#baseColor").value),
           edgeColor: hexToRgb(document.querySelector("#edgeColor").value),
           edgeFade: Number(document.querySelector("#edgeFade").value) * (tileSize / 32),
+          shades: Number(document.querySelector("#shades").value),
           textureNoise: Number(document.querySelector("#textureNoise").value),
           fleckAmount: Number(document.querySelector("#fleckAmount").value),
           seed: Number(document.querySelector("#seed").value) || 1,
@@ -734,6 +743,15 @@
         const noiseSize = Math.max(1, settings.edgeFrequency);
         const bg = settings.whiteBackground ? { r: 255, g: 255, b: 255, a: 255 } : { r: 0, g: 0, b: 0, a: 0 };
         const mapAxis = axisMapper(tile, g);
+
+        // Limited palette: a ramp of N colours from base (lightest) to edge (darkest).
+        // Every grass pixel snaps to one of these, so the tile reads as pixel art with a
+        // fixed palette instead of a smooth gradient.
+        const shades = Math.max(2, Math.round(settings.shades));
+        const ramp = [];
+        for (let i = 0; i < shades; i += 1) {
+          ramp.push(mixColor(settings.baseColor, settings.edgeColor, i / (shades - 1)));
+        }
 
         for (let py = 0; py < size; py += 1) {
           const ay = mapAxis(py);
@@ -778,19 +796,18 @@
               continue;
             }
 
-            const grain = (fbm(cx / 4.2, cy / 4.2, settings.seed + 809) - 0.5) * settings.textureNoise;
             const fleckSeed = hash2(Math.floor(cx / 2), Math.floor(cy / 2), settings.seed + mask * 17);
             const fleckOn = settings.pixelFlecks && settings.fleckAmount > 0 && fleckSeed > 1 - settings.fleckAmount / 250;
-            // Depth toward the nearest empty region (mirrors the noisy silhouette), so the
-            // fade hugs the real edge and ignores interior seams and bleeding edges.
+            // Position along the ramp in whole shade steps. Edge fade pushes toward the
+            // darker end, texture noise jitters by up to a step or so, and a fleck bumps
+            // one or two steps darker. Rounding to an integer index keeps everything on
+            // the palette, so transitions read as discrete pixel-art bands.
             const edgeDepth = maskVoidSdf(mask, lx, ly, tile, settings.cornerRadius) - edgeNoise;
             const edgeAmount = settings.edgeFade > 0 ? clamp(1 - edgeDepth / settings.edgeFade, 0, 1) : 0;
-            let color = mixColor(settings.baseColor, settings.edgeColor, edgeAmount);
-            color = shadeColor(color, grain);
-            if (fleckOn) {
-              const fleckTone = hash2(cx, cy, settings.seed + 421) > 0.54 ? -42 : 20;
-              color = shadeColor(mixColor(color, settings.edgeColor, 0.35), fleckTone);
-            }
+            let level = edgeAmount * (shades - 1);
+            level += (fbm(cx / 4.2, cy / 4.2, settings.seed + 809) - 0.5) * (settings.textureNoise / 42) * 4;
+            if (fleckOn) level += hash2(cx, cy, settings.seed + 421) > 0.6 ? 2 : 1;
+            const color = ramp[clamp(Math.round(level), 0, shades - 1)];
 
             data[i] = color.r;
             data[i + 1] = color.g;

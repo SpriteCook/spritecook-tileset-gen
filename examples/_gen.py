@@ -178,6 +178,8 @@ def render(cfg):
     white = cfg.get("whiteBackground", True)
     flecks_on = cfg.get("pixelFlecks", True)
     g = 1 if cfg.get("showGrid", True) else 0
+    shades = max(2, round(cfg.get("shades", 4)))
+    ramp = [mix(base, edge, i / (shades - 1)) for i in range(shades)]
 
     size = tile * 4 + g * 5
     bg = (255, 255, 255, 255) if white else (0, 0, 0, 0)
@@ -206,16 +208,15 @@ def render(cfg):
             if sdf + edge_noise > 0:
                 px[pxx, py] = bg
                 continue
-            grain = (fbm(cx / 4.2, cy / 4.2, seed + 809) - 0.5) * tex
             fleck_seed = hash2(math.floor(cx / 2), math.floor(cy / 2), seed + mask * 17)
             fleck_on = flecks_on and fleck > 0 and fleck_seed > 1 - fleck / 250
             depth = mask_void_sdf(mask, lx, ly, tile, radius) - edge_noise
             amount = clamp(1 - depth / edge_fade, 0, 1) if edge_fade > 0 else 0
-            color = mix(base, edge, amount)
-            color = shade(color, grain)
+            level = amount * (shades - 1)
+            level += (fbm(cx / 4.2, cy / 4.2, seed + 809) - 0.5) * (tex / 42) * 4
             if fleck_on:
-                tone = -42 if hash2(cx, cy, seed + 421) > 0.54 else 20
-                color = shade(mix(color, edge, 0.35), tone)
+                level += 2 if hash2(cx, cy, seed + 421) > 0.6 else 1
+            color = ramp[clamp(round(level), 0, shades - 1)]
             px[pxx, py] = (color[0], color[1], color[2], 255)
     return img
 
