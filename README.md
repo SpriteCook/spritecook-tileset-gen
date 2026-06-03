@@ -66,6 +66,6 @@ Here is a stone base from this tool next to the cobblestone SpriteCook generated
 
 | Base from this tool | Detailed with SpriteCook |
 | --- | --- |
-| ![Stone base](examples/cobblestone-base@6x.png) | ![Cobblestone detailed by SpriteCook](examples/cobblestone-detailed.png) |
+| ![Stone base](examples/cobblestone-base@8x.png) | ![Cobblestone detailed by SpriteCook](examples/cobblestone-detailed@4x.png) |
 
 Make your own at [spritecook.ai](https://www.spritecook.ai).

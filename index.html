@@ -828,13 +828,37 @@
       }
 
       function scaleCanvas(source, targetSize) {
+        const native = source.width;
         const target = document.createElement("canvas");
         target.width = targetSize;
         target.height = targetSize;
         const targetCtx = target.getContext("2d");
-        targetCtx.imageSmoothingEnabled = false;
         targetCtx.clearRect(0, 0, targetSize, targetSize);
-        targetCtx.drawImage(source, 0, 0, targetSize, targetSize);
+
+        // When the native size divides the target evenly (grid off: 64/128/256 into 1024), a
+        // plain nearest-neighbor scale keeps every pixel the same size, so it stays crisp.
+        if (native > 0 && targetSize % native === 0) {
+          targetCtx.imageSmoothingEnabled = false;
+          targetCtx.drawImage(source, 0, 0, targetSize, targetSize);
+          return target;
+        }
+
+        // Otherwise (grid on: 69/133/261 don't divide 1024) a single nearest scale renders the
+        // 1px grid lines unevenly. Nearest-upscale to the smallest integer multiple at or above
+        // the target first, so every source pixel is identical in size, then bilinear-downscale
+        // to exactly the target for uniform lines (with a little softening).
+        const factor = Math.max(1, Math.ceil(targetSize / Math.max(1, native)));
+        const upSize = native * factor;
+        const up = document.createElement("canvas");
+        up.width = upSize;
+        up.height = upSize;
+        const upCtx = up.getContext("2d");
+        upCtx.imageSmoothingEnabled = false;
+        upCtx.drawImage(source, 0, 0, upSize, upSize);
+
+        targetCtx.imageSmoothingEnabled = true;
+        targetCtx.imageSmoothingQuality = "high";
+        targetCtx.drawImage(up, 0, 0, targetSize, targetSize);
         return target;
       }
 
