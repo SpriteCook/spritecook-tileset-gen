@@ -121,6 +121,13 @@
         line-height: 1.2;
       }
 
+      .hint {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.25;
+      }
+
       .segmented {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -350,7 +357,7 @@
       <aside class="sidebar" aria-label="Tileset controls">
         <section class="brand">
           <h1>Tileset Base Generator</h1>
-          <div class="meta">15 pieces<br />4 x 4 mask sheet</div>
+          <div class="meta" id="sheetMeta">15 pieces<br />4 x 4 mask sheet</div>
         </section>
 
         <section class="panel">
@@ -359,7 +366,8 @@
             <div class="row">
               <label for="tilesetType">Tileset</label>
               <select id="tilesetType">
-                <option value="15-piece">15-piece (4x4)</option>
+                <option value="topdown-15">15-piece (4x4)</option>
+                <option value="topdown-17">17-piece (5x5)</option>
               </select>
             </div>
 
@@ -377,6 +385,17 @@
               <div class="range-wrap">
                 <input id="cornerRadius" type="range" min="0" max="18" value="4" />
                 <output class="value" for="cornerRadius">4</output>
+              </div>
+            </div>
+
+            <div class="row" id="edgePaddingRow" hidden>
+              <label for="edgePadding">Tile padding</label>
+              <div>
+                <div class="range-wrap">
+                  <input id="edgePadding" type="range" min="1" max="6" value="2" />
+                  <output class="value" for="edgePadding">2</output>
+                </div>
+                <div class="hint">Distance from an open tile edge</div>
               </div>
             </div>
 
@@ -502,7 +521,7 @@
       <section class="preview-stage" aria-label="Tileset preview">
         <div class="preview-toolbar">
           <div class="readout" id="readout">ready</div>
-          <div class="readout">slot 4,10,13,12 / 9,14,15,7 / 2,3,11,5 / 0,8,6,1</div>
+          <div class="readout" id="layoutReadout">slot 4,10,13,12 / 9,14,15,7 / 2,3,11,5 / 0,8,6,1</div>
         </div>
         <div class="canvas-wrap">
           <canvas id="preview" width="1024" height="1024"></canvas>
@@ -526,6 +545,40 @@
         [0, 8, 6, 1],
       ];
 
+      const emptyPiece = { kind: "empty" };
+      const rectPiece = (connections) => ({ kind: "rect", ...connections });
+      const topdown17Layout = [
+        [emptyPiece, emptyPiece, emptyPiece, emptyPiece, emptyPiece],
+        [
+          rectPiece({ s: true }),
+          rectPiece({ e: true, s: true }),
+          rectPiece({ e: true, s: true, w: true }),
+          rectPiece({ s: true, w: true }),
+          { kind: "innerCorners" },
+        ],
+        [
+          rectPiece({ n: true, s: true }),
+          rectPiece({ n: true, e: true, s: true }),
+          rectPiece({ n: true, e: true, s: true, w: true }),
+          rectPiece({ n: true, s: true, w: true }),
+          emptyPiece,
+        ],
+        [
+          rectPiece({ n: true }),
+          rectPiece({ n: true, e: true }),
+          rectPiece({ n: true, e: true, w: true }),
+          rectPiece({ n: true, w: true }),
+          emptyPiece,
+        ],
+        [
+          rectPiece({}),
+          rectPiece({ e: true }),
+          rectPiece({ e: true, w: true }),
+          rectPiece({ w: true }),
+          emptyPiece,
+        ],
+      ];
+
       // Corner bits: TL = 1, TR = 2, BL = 4, BR = 8. Each tile is a union of the
       // filled quadrants. A quadrant side bleeds (extends to the tile edge) when the
       // region across it is grass — either outside the tile (so neighbours connect) or
@@ -546,6 +599,9 @@
       const preview = document.querySelector("#preview");
       const ctx = preview.getContext("2d");
       const readout = document.querySelector("#readout");
+      const layoutReadout = document.querySelector("#layoutReadout");
+      const sheetMeta = document.querySelector("#sheetMeta");
+      const edgePaddingRow = document.querySelector("#edgePaddingRow");
       const ranges = document.querySelectorAll('input[type="range"]');
       const state = {
         tileSize: 32,
@@ -701,14 +757,46 @@
         return dist;
       }
 
+      function rectPieceSdf(piece, x, y, tileSize, radius, roughness, padding) {
+        const ext = radius + roughness + 1;
+        const inset = clamp(Math.round(padding), 1, Math.max(1, Math.floor(tileSize * 0.35)));
+        const l = piece.w ? 0 - ext : inset;
+        const r = piece.e ? tileSize + ext : tileSize - inset;
+        const t = piece.n ? 0 - ext : inset;
+        const b = piece.s ? tileSize + ext : tileSize - inset;
+        return roundedBoxSdf(x, y, l, t, r, b, radius);
+      }
+
+      function innerCornersSdf(x, y, tileSize, radius, roughness, padding) {
+        const ext = radius + roughness + 1;
+        const base = roundedBoxSdf(x, y, 0 - ext, 0 - ext, tileSize + ext, tileSize + ext, radius);
+        const notch = clamp(Math.round(padding), 1, Math.max(1, Math.floor(tileSize * 0.35)));
+        const notchRadius = Math.max(1, Math.min(radius, notch * 0.45));
+        const notches = [
+          roundedBoxSdf(x, y, 0 - ext, 0 - ext, notch, notch, notchRadius),
+          roundedBoxSdf(x, y, tileSize - notch, 0 - ext, tileSize + ext, notch, notchRadius),
+          roundedBoxSdf(x, y, 0 - ext, tileSize - notch, notch, tileSize + ext, notchRadius),
+          roundedBoxSdf(x, y, tileSize - notch, tileSize - notch, tileSize + ext, tileSize + ext, notchRadius),
+        ];
+        return Math.max(base, -Math.min(...notches));
+      }
+
+      function topdown17Sdf(piece, x, y, tileSize, radius, roughness, padding) {
+        if (!piece || piece.kind === "empty") return 9999;
+        if (piece.kind === "innerCorners") return innerCornersSdf(x, y, tileSize, radius, roughness, padding);
+        return rectPieceSdf(piece, x, y, tileSize, radius, roughness, padding);
+      }
+
       function getSettings() {
         const tileSize = state.tileSize;
         return {
+          tilesetType: document.querySelector("#tilesetType").value,
           tileSize,
           cornerRadius: Number(document.querySelector("#cornerRadius").value) * (tileSize / 32),
           edgeStyle: state.edgeStyle,
           edgeRoughness: Number(document.querySelector("#edgeRoughness").value) * (tileSize / 32),
           edgeFrequency: Number(document.querySelector("#edgeFrequency").value),
+          edgePadding: Number(document.querySelector("#edgePadding").value) * (tileSize / 16),
           baseColor: hexToRgb(document.querySelector("#baseColor").value),
           edgeColor: hexToRgb(document.querySelector("#edgeColor").value),
           edgeFade: Number(document.querySelector("#edgeFade").value) * (tileSize / 32),
@@ -739,7 +827,9 @@
       function renderLogical(settings) {
         const tile = settings.tileSize;
         const g = settings.showGrid ? 1 : 0;
-        const size = tile * 4 + g * 5;
+        const topdown17 = settings.tilesetType === "topdown-17";
+        const cells = topdown17 ? 5 : 4;
+        const size = tile * cells + g * (cells + 1);
         const logical = document.createElement("canvas");
         logical.width = size;
         logical.height = size;
@@ -776,8 +866,9 @@
 
             const col = ax.cell;
             const row = ay.cell;
-            const mask = layout[row][col];
-            if (mask === 0) {
+            const piece = topdown17 ? topdown17Layout[row][col] : null;
+            const mask = topdown17 ? 0 : layout[row][col];
+            if ((topdown17 && (!piece || piece.kind === "empty")) || (!topdown17 && mask === 0)) {
               data[i] = bg.r;
               data[i + 1] = bg.g;
               data[i + 2] = bg.b;
@@ -791,8 +882,11 @@
             // smoothly tile-to-tile.
             const cx = col * tile + ax.local;
             const cy = row * tile + ay.local;
-            const sdf = maskSdf(mask, lx, ly, tile, settings.cornerRadius, roughness);
-            const edgeNoise = (fbm(cx / noiseSize, cy / noiseSize, settings.seed + mask * 113) - 0.5) * roughness;
+            const sdf = topdown17
+              ? topdown17Sdf(piece, lx, ly, tile, settings.cornerRadius, roughness, settings.edgePadding)
+              : maskSdf(mask, lx, ly, tile, settings.cornerRadius, roughness);
+            const pieceSeed = topdown17 ? row * cells + col + 1 : mask;
+            const edgeNoise = (fbm(cx / noiseSize, cy / noiseSize, settings.seed + pieceSeed * 113) - 0.5) * roughness;
             const adjusted = sdf + edgeNoise;
 
             if (adjusted > 0) {
@@ -803,13 +897,15 @@
               continue;
             }
 
-            const fleckSeed = hash2(Math.floor(cx / 2), Math.floor(cy / 2), settings.seed + mask * 17);
+            const fleckSeed = hash2(Math.floor(cx / 2), Math.floor(cy / 2), settings.seed + pieceSeed * 17);
             const fleckOn = settings.pixelFlecks && settings.fleckAmount > 0 && fleckSeed > 1 - settings.fleckAmount / 250;
             // Position along the ramp in whole shade steps. Edge fade pushes toward the
             // darker end, texture noise jitters by up to a step or so, and a fleck bumps
             // one or two steps darker. Rounding to an integer index keeps everything on
             // the palette, so transitions read as discrete pixel-art bands.
-            const edgeDepth = maskVoidSdf(mask, lx, ly, tile, settings.cornerRadius) - edgeNoise;
+            const edgeDepth = topdown17
+              ? -(sdf + edgeNoise)
+              : maskVoidSdf(mask, lx, ly, tile, settings.cornerRadius) - edgeNoise;
             const edgeAmount = settings.edgeFade > 0 ? clamp(1 - edgeDepth / settings.edgeFade, 0, 1) : 0;
             let level = edgeAmount * (shades - 1);
             level += (fbm(cx / 4.2, cy / 4.2, settings.seed + 809) - 0.5) * (settings.textureNoise / 42) * 4;
@@ -864,6 +960,7 @@
 
       function render() {
         const settings = getSettings();
+        updateModeUi(settings);
         const logical = renderLogical(settings);
         // Preview shows the true native pixels, upscaled by CSS (image-rendering:
         // pixelated) so it stays crisp and readable while editing.
@@ -873,7 +970,17 @@
         ctx.clearRect(0, 0, preview.width, preview.height);
         ctx.drawImage(logical, 0, 0);
         const upscale = settings.providerSize ? ` / exports 1024` : "";
-        readout.textContent = `${settings.tileSize}px tiles / ${logical.width}x${logical.height}px native${upscale} / seed ${settings.seed}`;
+        const label = settings.tilesetType === "topdown-17" ? "17-piece top-down" : "15-piece top-down";
+        readout.textContent = `${settings.tileSize}px tiles / ${label} / ${logical.width}x${logical.height}px native${upscale} / seed ${settings.seed}`;
+      }
+
+      function updateModeUi(settings = getSettings()) {
+        const is17 = settings.tilesetType === "topdown-17";
+        edgePaddingRow.hidden = !is17;
+        sheetMeta.innerHTML = is17 ? "17 pieces<br />5 x 5 guide sheet" : "15 pieces<br />4 x 4 mask sheet";
+        layoutReadout.textContent = is17
+          ? "layout single + vertical + horizontal + 3x3 island + inner corners"
+          : "slot 4,10,13,12 / 9,14,15,7 / 2,3,11,5 / 0,8,6,1";
       }
 
       function syncRangeOutputs() {
@@ -906,6 +1013,9 @@
 
       document.querySelectorAll("input, select").forEach((control) => {
         control.addEventListener("input", () => {
+          if (control.id === "tilesetType" && control.value === "topdown-17") {
+            document.querySelector("#showGrid").checked = true;
+          }
           syncRangeOutputs();
           render();
         });
@@ -930,8 +1040,9 @@
         const logical = renderLogical(settings);
         const output = settings.providerSize ? scaleCanvas(logical, 1024) : logical;
         const dim = settings.providerSize ? "1024" : `${logical.width}px`;
+        const mode = settings.tilesetType === "topdown-17" ? "topdown-17" : "topdown-15";
         const link = document.createElement("a");
-        link.download = `tileset-base-${settings.tileSize}px-${dim}-seed-${settings.seed}.png`;
+        link.download = `tileset-base-${mode}-${settings.tileSize}px-${dim}-seed-${settings.seed}.png`;
         link.href = output.toDataURL("image/png");
         link.click();
       });
